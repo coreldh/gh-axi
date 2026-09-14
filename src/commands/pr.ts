@@ -25,6 +25,7 @@ import { fetchListTotal, type ListFilter } from "../totals.js";
 import { getSuggestions } from "../suggestions.js";
 import {
   takeFlag,
+  takeSingleRequiredFlag,
   takeBoolFlag,
   takeNumber,
   takeAllFlags,
@@ -321,6 +322,7 @@ export const PR_FLAGS: Record<string, readonly string[]> = {
     "--body",
     "--body-file",
     "--subject",
+    "--match-head-commit",
   ],
   review: [
     "--approve",
@@ -353,7 +355,7 @@ flags{edit}:
 flags{close}:
   --comment <text>
 flags{merge}:
-  --method <merge|squash|rebase>, --merge, --squash, --rebase, --auto, --admin (use administrator privileges to bypass merge requirements; cannot combine with --auto), --delete-branch, --body <text> or --body-file <path>, --subject
+  --method <merge|squash|rebase>, --merge, --squash, --rebase, --auto, --admin (use administrator privileges to bypass merge requirements; cannot combine with --auto), --delete-branch, --body <text> or --body-file <path>, --subject, --match-head-commit <SHA> (require the PR head to match before merging)
 flags{review}:
   --approve, --request-changes, --comment, --body <text> or --body-file <path>
 flags{comment}:
@@ -780,6 +782,9 @@ function rejectValuedMergeSwitches(args: string[]): void {
 
 async function prMerge(args: string[], ctx?: RepoContext): Promise<string> {
   rejectValuedMergeSwitches(args);
+  // Extract before positional/body/subject parsing can swallow the condition.
+  // Pass the value unchanged to gh, which enforces the head match.
+  const matchHeadCommit = takeSingleRequiredFlag(args, "--match-head-commit");
   const num = takeNumber(args, "PR");
   const explicitMethod = takeFlag(args, "--method");
   const shorthandMethods = ["merge", "squash", "rebase"].filter((candidate) =>
@@ -855,6 +860,7 @@ async function prMerge(args: string[], ctx?: RepoContext): Promise<string> {
   if (deleteBranch) ghArgs.push("--delete-branch");
   if (body !== undefined) ghArgs.push("--body", body);
   if (subject) ghArgs.push("--subject", subject);
+  if (matchHeadCommit) ghArgs.push("--match-head-commit", matchHeadCommit);
 
   await ghExec(ghArgs, ctx);
 
